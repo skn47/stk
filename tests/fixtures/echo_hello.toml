@@ -1,0 +1,4 @@
+name = "echo_hello"
+command = ["echo", "hello world"]
+must_preserve = ["hello world"]
+may_remove = []

@@ -1,6 +1,7 @@
 use std::io::{Read, Write};
 
 use crate::capture::executor::CommandExecutor;
+use crate::verbs;
 
 /// Entry point every `stk` invocation goes through. Writes to `stdout`/`stderr` as output
 /// becomes available (not a buffered return value) so `run`/`proxy` can stream live later.
@@ -9,10 +10,11 @@ pub fn run(
     _stdin: impl Read,
     _stdout: &mut dyn Write,
     stderr: &mut dyn Write,
-    _executor: &dyn CommandExecutor,
+    executor: &dyn CommandExecutor,
 ) -> i32 {
-    match args.first() {
-        Some(command) => unsupported_command(command, stderr),
+    match args.split_first() {
+        Some((command, rest)) if command == "run" => verbs::run::dispatch(rest, stderr, executor),
+        Some((command, _)) => unsupported_command(command, stderr),
         None => no_command_given(stderr),
     }
 }
