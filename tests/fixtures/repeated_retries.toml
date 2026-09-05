@@ -1,0 +1,4 @@
+name = "repeated_retries"
+stdin = "connecting...\nretrying connection...\nretrying connection...\nretrying connection...\nretrying connection...\nconnected\n"
+must_preserve = ["connecting...", "connected", "repeated 4x"]
+may_remove = ["retrying connection..."]

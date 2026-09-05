@@ -1,0 +1,4 @@
+name = "ansi_heavy"
+stdin = "\u001b[32mBuilding project\u001b[0m\n\u001b[31merror[E0308]: mismatched types\u001b[0m\n\u001b[2K\u001b[1Gdone\n"
+must_preserve = ["Building project", "error[E0308]: mismatched types", "done"]
+may_remove = []

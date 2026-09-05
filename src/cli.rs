@@ -22,6 +22,9 @@ pub fn run(
         Some((command, rest)) if command == "pipe" => {
             verbs::pipe::dispatch(rest, stdin, stdout, stderr)
         }
+        Some((command, rest)) if command == "compile" => {
+            verbs::compile::dispatch(rest, stdin, stdout, stderr, executor)
+        }
         Some((command, _)) => unsupported_command(command, stderr),
         None => no_command_given(stderr),
     }

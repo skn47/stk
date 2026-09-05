@@ -18,6 +18,15 @@ pub struct ExecutionResult {
     pub stderr: Vec<u8>,
 }
 
+impl ExecutionResult {
+    pub fn exit_info(&self) -> ExitInfo {
+        ExitInfo {
+            exit_code: self.exit_code,
+            terminating_signal: self.terminating_signal,
+        }
+    }
+}
+
 /// Like [`ExecutionResult`], but without captured output — used where output is inherited
 /// directly rather than passing through our code.
 #[derive(Debug, Clone, Copy, Default)]

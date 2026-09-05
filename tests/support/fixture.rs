@@ -1,14 +1,18 @@
 use serde::Deserialize;
 use std::path::Path;
 
-/// A raw command from the fixture corpus, with expectations about what must survive
-/// compression and what may be removed. A raw passthrough verb removes nothing, so
-/// `may_remove` goes unused by tests of one.
+/// A raw command or literal input from the fixture corpus, with expectations about what
+/// must survive compression and what may be removed. A raw passthrough verb removes
+/// nothing, so `may_remove` goes unused by tests of one. `stdin` is for canned log
+/// content with no real underlying command (e.g. fast-path fixtures); `command` is for
+/// golden-comparison fixtures that must actually run against the real `rtk`.
 #[derive(Debug, Deserialize)]
 pub struct Fixture {
     pub name: String,
     #[serde(default)]
     pub command: Vec<String>,
+    #[serde(default)]
+    pub stdin: Option<String>,
     #[serde(default)]
     pub must_preserve: Vec<String>,
     #[serde(default)]
