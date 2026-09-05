@@ -8,8 +8,8 @@ use crate::verbs;
 /// becomes available (not a buffered return value) so `run`/`proxy` can stream live later.
 pub fn run(
     args: &[String],
-    _stdin: impl Read,
-    _stdout: &mut dyn Write,
+    stdin: impl Read,
+    stdout: &mut dyn Write,
     stderr: &mut dyn Write,
     executor: &dyn CommandExecutor,
     history: &dyn HistoryStore,
@@ -18,6 +18,9 @@ pub fn run(
         Some((command, rest)) if command == "run" => verbs::run::dispatch(rest, stderr, executor),
         Some((command, rest)) if command == "proxy" => {
             verbs::proxy::dispatch(rest, stderr, executor, history)
+        }
+        Some((command, rest)) if command == "pipe" => {
+            verbs::pipe::dispatch(rest, stdin, stdout, stderr)
         }
         Some((command, _)) => unsupported_command(command, stderr),
         None => no_command_given(stderr),
