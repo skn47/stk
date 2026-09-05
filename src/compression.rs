@@ -114,16 +114,16 @@ fn write_budgeted(
     }
 }
 
-enum WriteOutcome {
+pub(crate) enum WriteOutcome {
     BrokenPipe,
     Failed(std::io::Error),
-    /// The failure was already reported to stderr (by `write_budgeted`'s own, more
-    /// specific message) -- the caller should use this exit code without printing
-    /// another, generic "failed to write output" line for the same failure.
+    /// The failure was already reported to stderr (by the caller's own, more specific
+    /// message) -- the caller should use this exit code without printing another,
+    /// generic "failed to write output" line for the same failure.
     AlreadyReported(i32),
 }
 
-fn write_output(sink: &mut dyn Write, data: &[u8]) -> Result<(), WriteOutcome> {
+pub(crate) fn write_output(sink: &mut dyn Write, data: &[u8]) -> Result<(), WriteOutcome> {
     match sink.write_all(data) {
         Ok(()) => Ok(()),
         Err(err) if err.kind() == ErrorKind::BrokenPipe => Err(WriteOutcome::BrokenPipe),

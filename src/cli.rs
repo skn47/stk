@@ -35,6 +35,15 @@ pub fn run(
         Some((command, rest)) if command == "compile" => {
             verbs::compile::dispatch(rest, stdin, stdout, stderr, executor, options.budget)
         }
+        Some((command, rest)) if command == "read" => {
+            verbs::read::dispatch(rest, stdout, stderr, options.budget)
+        }
+        Some((command, rest)) if command == "grep" => {
+            verbs::grep::dispatch(rest, stdout, stderr, options.budget)
+        }
+        Some((command, rest)) if command == "find" => {
+            verbs::find::dispatch(rest, stdout, stderr, options.budget)
+        }
         Some((command, rest)) => match specialists::lookup(command) {
             Some(classify) => compression::execute_and_compress(
                 command,

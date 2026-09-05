@@ -1,5 +1,10 @@
 pub mod compile;
+mod file_walk;
+mod filesystem_budget;
+pub mod find;
+pub mod grep;
 mod passthrough;
 pub mod pipe;
 pub mod proxy;
+pub mod read;
 pub mod run;

@@ -21,7 +21,9 @@ explicit token budget, improving on stateless compressors like `rtk`.
   logic through the fakes — no real subprocesses.
 - **Integration tests** (`tests/*.rs`) spawn the actual compiled binary
   (`env!("CARGO_BIN_EXE_stk")`) when a behavior can only be verified at the OS level
-  (signal forwarding, byte-identical passthrough, EPIPE handling).
+  (signal forwarding, byte-identical passthrough, EPIPE handling) -- except the
+  filesystem filters (`read`/`grep`/`find`), which never touch `CommandExecutor` at all
+  and so test through `cli::run` in-process against real temp-directory files instead.
 - **Golden-comparison tests** run the same invocation through `stk` and the real
   installed `rtk` binary, asserting equivalence; skip (don't fail) when `rtk` isn't
   installed (`tests/support/rtk.rs`). Verify claims about `rtk`'s actual behavior against
