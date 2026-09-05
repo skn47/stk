@@ -1,4 +1,5 @@
 pub mod compile;
+pub mod config;
 pub mod diff;
 pub mod err;
 mod file_walk;

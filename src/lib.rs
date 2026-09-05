@@ -4,6 +4,7 @@ pub mod capture;
 pub mod chunk;
 pub mod cli;
 pub(crate) mod compression;
+pub mod config;
 pub mod fastpath;
 pub mod history;
 pub mod normalize;
