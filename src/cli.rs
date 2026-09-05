@@ -72,6 +72,7 @@ pub fn run(
         Some((command, rest)) if command == "gain" => {
             verbs::gain::dispatch(rest, stdout, stderr, history)
         }
+        Some((command, rest)) if command == "bench" => verbs::bench::dispatch(rest, stdout, stderr),
         Some((command, rest)) => match specialists::lookup(command) {
             Some(classify) => compression::execute_and_compress(
                 command,

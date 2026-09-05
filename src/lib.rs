@@ -8,6 +8,7 @@ pub mod config;
 pub mod fastpath;
 pub mod history;
 pub mod normalize;
+pub mod rtk;
 pub mod scoring;
 pub mod specialists;
 pub mod verbs;
