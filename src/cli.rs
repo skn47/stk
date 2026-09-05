@@ -62,6 +62,7 @@ pub fn run(
         Some((command, rest)) if command == "config" => {
             verbs::config::dispatch(rest, stdout, stderr, options.budget)
         }
+        Some((command, rest)) if command == "init" => verbs::init::dispatch(rest, stdout, stderr),
         Some((command, rest)) => match specialists::lookup(command) {
             Some(classify) => compression::execute_and_compress(
                 command,

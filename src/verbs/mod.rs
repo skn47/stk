@@ -6,6 +6,7 @@ mod file_walk;
 mod filesystem_budget;
 pub mod find;
 pub mod grep;
+pub mod init;
 pub mod json;
 pub mod log;
 mod passthrough;

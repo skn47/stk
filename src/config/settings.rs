@@ -123,6 +123,29 @@ pub fn render(settings: &Settings) -> String {
     toml::to_string(&table).unwrap_or_default()
 }
 
+/// Atomically writes the default settings to `path` unless it already exists (an
+/// existing file is left completely untouched). Shared by every caller that needs a
+/// fresh, default project or global config file created idempotently.
+pub fn create_default_file(path: &std::path::Path) -> std::io::Result<bool> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let contents = render(&Settings::defaults());
+    match std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+    {
+        Ok(mut file) => {
+            use std::io::Write;
+            file.write_all(contents.as_bytes())?;
+            Ok(true)
+        }
+        Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => Ok(false),
+        Err(err) => Err(err),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

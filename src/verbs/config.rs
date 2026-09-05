@@ -1,8 +1,7 @@
-use std::fs::OpenOptions;
 use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
 
-use crate::config::settings::{self, PartialSettings, Settings};
+use crate::config::settings::{self, PartialSettings};
 
 /// `stk config [--create]`: shows the effective, precedence-resolved configuration, or
 /// creates the global config file with defaults if `--create` is given and none exists.
@@ -79,34 +78,13 @@ fn read_config_file(path: &Path, stderr: &mut dyn Write) -> Result<Option<String
     }
 }
 
-/// Uses `create_new` (atomic create-or-fail) rather than a separate `exists()` check
-/// followed by a write, so two concurrent `--create` runs can't race past the check and
-/// have the second one silently clobber the first's file.
 fn create_config(path: &Path, stdout: &mut dyn Write, stderr: &mut dyn Write) -> i32 {
-    if let Some(parent) = path.parent() {
-        if let Err(err) = std::fs::create_dir_all(parent) {
-            let _ = writeln!(
-                stderr,
-                "stk: failed to create '{}': {err}",
-                parent.display()
-            );
-            return 1;
+    match settings::create_default_file(path) {
+        Ok(true) => {
+            let _ = writeln!(stdout, "Created: {}", path.display());
+            0
         }
-    }
-
-    let contents = settings::render(&Settings::defaults());
-    match OpenOptions::new().write(true).create_new(true).open(path) {
-        Ok(mut file) => match file.write_all(contents.as_bytes()) {
-            Ok(()) => {
-                let _ = writeln!(stdout, "Created: {}", path.display());
-                0
-            }
-            Err(err) => {
-                let _ = writeln!(stderr, "stk: failed to write '{}': {err}", path.display());
-                1
-            }
-        },
-        Err(err) if err.kind() == ErrorKind::AlreadyExists => {
+        Ok(false) => {
             let _ = writeln!(stdout, "Config already exists: {}", path.display());
             0
         }
