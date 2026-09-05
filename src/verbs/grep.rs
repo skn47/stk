@@ -4,7 +4,7 @@ use std::path::Path;
 use crate::budget::tokenizer::ApproximateCounter;
 use crate::compression::{write_output, WriteOutcome};
 use crate::verbs::file_walk::walk_files;
-use crate::verbs::filesystem_budget::{terminated, truncate_sequential, TooSmall};
+use crate::verbs::filesystem_budget::render_optionally_budgeted;
 
 /// `stk grep <pattern> <path>`: a native, `Budget`-aware search (not an `rg` wrapper).
 /// Substring matching only in this release -- no regex engine dependency. Stateless.
@@ -30,18 +30,15 @@ pub fn dispatch(
         return 1;
     }
 
-    let rendered = match budget {
-        None => terminated(matches.join("\n")),
-        Some(budget) => match truncate_sequential(&matches, budget, &ApproximateCounter) {
-            Ok(rendered) => rendered,
-            Err(TooSmall { minimum }) => {
-                let _ = writeln!(
-                    stderr,
-                    "stk: --budget {budget} is too small to render any matches (minimum: {minimum})"
-                );
-                return 2;
-            }
-        },
+    let rendered = match render_optionally_budgeted(
+        &matches,
+        budget,
+        &ApproximateCounter,
+        "any matches",
+        stderr,
+    ) {
+        Ok(rendered) => rendered,
+        Err(code) => return code,
     };
 
     match write_output(stdout, rendered.as_bytes()) {

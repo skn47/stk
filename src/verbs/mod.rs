@@ -1,10 +1,15 @@
 pub mod compile;
+pub mod diff;
+pub mod err;
 mod file_walk;
 mod filesystem_budget;
 pub mod find;
 pub mod grep;
+pub mod json;
+pub mod log;
 mod passthrough;
 pub mod pipe;
 pub mod proxy;
 pub mod read;
 pub mod run;
+pub mod summary;

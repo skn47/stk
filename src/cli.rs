@@ -44,6 +44,21 @@ pub fn run(
         Some((command, rest)) if command == "find" => {
             verbs::find::dispatch(rest, stdout, stderr, options.budget)
         }
+        Some((command, rest)) if command == "log" => {
+            verbs::log::dispatch(rest, stdin, stdout, stderr, options.budget)
+        }
+        Some((command, rest)) if command == "err" => {
+            verbs::err::dispatch(rest, stdout, stderr, executor, options.budget)
+        }
+        Some((command, rest)) if command == "summary" => {
+            verbs::summary::dispatch(rest, stdout, stderr, executor, options.budget)
+        }
+        Some((command, rest)) if command == "diff" => {
+            verbs::diff::dispatch(rest, stdin, stdout, stderr, options.budget)
+        }
+        Some((command, rest)) if command == "json" => {
+            verbs::json::dispatch(rest, stdout, stderr, options.budget)
+        }
         Some((command, rest)) => match specialists::lookup(command) {
             Some(classify) => compression::execute_and_compress(
                 command,

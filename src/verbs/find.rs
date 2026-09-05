@@ -4,7 +4,7 @@ use std::path::Path;
 use crate::budget::tokenizer::ApproximateCounter;
 use crate::compression::{write_output, WriteOutcome};
 use crate::verbs::file_walk::walk_files;
-use crate::verbs::filesystem_budget::{terminated, truncate_sequential, TooSmall};
+use crate::verbs::filesystem_budget::render_optionally_budgeted;
 
 /// `stk find <path> [--name PATTERN]`: a native, `Budget`-aware recursive file listing
 /// (not a `find` wrapper). `--name` is a substring match, not a glob. Stateless.
@@ -37,18 +37,15 @@ pub fn dispatch(
     }
     entries.sort();
 
-    let rendered = match budget {
-        None => terminated(entries.join("\n")),
-        Some(budget) => match truncate_sequential(&entries, budget, &ApproximateCounter) {
-            Ok(rendered) => rendered,
-            Err(TooSmall { minimum }) => {
-                let _ = writeln!(
-                    stderr,
-                    "stk: --budget {budget} is too small to render any results (minimum: {minimum})"
-                );
-                return 2;
-            }
-        },
+    let rendered = match render_optionally_budgeted(
+        &entries,
+        budget,
+        &ApproximateCounter,
+        "any results",
+        stderr,
+    ) {
+        Ok(rendered) => rendered,
+        Err(code) => return code,
     };
 
     match write_output(stdout, rendered.as_bytes()) {

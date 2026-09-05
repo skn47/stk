@@ -1,8 +1,54 @@
+use std::io::Write;
+
 use crate::budget::tokenizer::TokenCounter;
 
 #[derive(Debug)]
 pub struct TooSmall {
     pub minimum: usize,
+}
+
+/// The largest `k` in `0..=max_k` for which `fits(k)` holds, assuming `fits` is
+/// monotonic (true for small `k`, false past some point) -- the shared core of both
+/// head+tail truncation strategies below, which differ only in what a "unit" is
+/// (chars vs. lines) and how the kept portions get joined back together.
+fn largest_k_that_fits(max_k: usize, fits: impl Fn(usize) -> bool) -> usize {
+    let mut lo = 0usize;
+    let mut hi = max_k;
+    while lo < hi {
+        let mid = lo + (hi - lo).div_ceil(2);
+        if fits(mid) {
+            lo = mid;
+        } else {
+            hi = mid - 1;
+        }
+    }
+    lo
+}
+
+/// Applies `Budget` truncation if given (else joins everything), writing a clear error
+/// to `stderr` and returning the exit code to use if the budget is below the floor.
+/// Shared by every verb whose content is a flat, sequentially-truncatable line list
+/// (`grep`/`find`/`diff`/`err`/`summary`).
+pub fn render_optionally_budgeted(
+    items: &[String],
+    budget: Option<usize>,
+    counter: &dyn TokenCounter,
+    what: &str,
+    stderr: &mut dyn Write,
+) -> Result<String, i32> {
+    match budget {
+        None => Ok(terminated(items.join("\n"))),
+        Some(budget) => match truncate_sequential(items, budget, counter) {
+            Ok(rendered) => Ok(rendered),
+            Err(TooSmall { minimum }) => {
+                let _ = writeln!(
+                    stderr,
+                    "stk: --budget {budget} is too small to render {what} (minimum: {minimum})"
+                );
+                Err(2)
+            }
+        },
+    }
 }
 
 fn omission_marker(count: usize) -> String {
@@ -20,6 +66,47 @@ pub fn terminated(mut s: String) -> String {
         s.push('\n');
     }
     s
+}
+
+fn omission_marker_chars(count: usize) -> String {
+    if count == 1 {
+        "[stk: omitted 1 char]".to_string()
+    } else {
+        format!("[stk: omitted {count} chars]")
+    }
+}
+
+/// Character-based head+tail truncation for a single long blob with no natural line
+/// breaks (e.g. compacted JSON) -- `truncate_head_tail` below operates on lines, which
+/// degrades to "keep nothing" for content that's just one unbroken line.
+pub fn truncate_chars_head_tail(
+    content: &str,
+    budget: usize,
+    counter: &dyn TokenCounter,
+) -> Result<String, TooSmall> {
+    if counter.count(content) <= budget {
+        return Ok(content.to_string());
+    }
+    let chars: Vec<char> = content.chars().collect();
+    let marker_reserve = counter.count(&omission_marker_chars(chars.len()));
+    if budget < marker_reserve {
+        return Err(TooSmall {
+            minimum: marker_reserve,
+        });
+    }
+    let remaining = budget - marker_reserve;
+
+    let fits = |k: usize| -> bool {
+        let head: String = chars[..k].iter().collect();
+        let tail: String = chars[chars.len() - k..].iter().collect();
+        counter.count(&head) + counter.count(&tail) <= remaining
+    };
+
+    let k = largest_k_that_fits(chars.len() / 2, fits);
+    let omitted = chars.len() - 2 * k;
+    let head: String = chars[..k].iter().collect();
+    let tail: String = chars[chars.len() - k..].iter().collect();
+    Ok(format!("{head}{}{tail}", omission_marker_chars(omitted)))
 }
 
 /// Conservative text-based slicing for a single file's content: keeps the head and tail
@@ -47,19 +134,7 @@ pub fn truncate_head_tail(
         counter.count(&head) + counter.count(&tail) <= remaining
     };
 
-    let max_k = lines.len() / 2;
-    let mut lo = 0usize;
-    let mut hi = max_k;
-    while lo < hi {
-        let mid = lo + (hi - lo).div_ceil(2);
-        if fits(mid) {
-            lo = mid;
-        } else {
-            hi = mid - 1;
-        }
-    }
-
-    let k = lo;
+    let k = largest_k_that_fits(lines.len() / 2, fits);
     let omitted = lines.len() - 2 * k;
     let head = lines[..k].join("\n");
     let tail = lines[lines.len() - k..].join("\n");
@@ -147,6 +222,17 @@ mod tests {
         let content = lines(200);
         let result = truncate_head_tail(&content, 1, &ApproximateCounter);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn chars_head_tail_keeps_both_ends_of_an_unbroken_blob() {
+        let blob = format!("{{\"start\":true,{}\"end\":true}}", "x".repeat(2000));
+        let result = truncate_chars_head_tail(&blob, 60, &ApproximateCounter).unwrap();
+
+        assert!(result.starts_with("{\"start\":true,"));
+        assert!(result.ends_with("\"end\":true}"));
+        assert!(result.contains("[stk: omitted"));
+        assert!(ApproximateCounter.count(&result) <= 60);
     }
 
     #[test]
