@@ -5,6 +5,7 @@ use crate::capture::executor::CommandExecutor;
 use crate::chunk::ChunkKind;
 use crate::compression::{write_output, WriteOutcome};
 use crate::fastpath;
+use crate::history::HistoryStore;
 use crate::scoring::relevance;
 use crate::verbs::filesystem_budget::render_optionally_budgeted;
 
@@ -15,6 +16,7 @@ pub fn dispatch(
     stdout: &mut dyn Write,
     stderr: &mut dyn Write,
     executor: &dyn CommandExecutor,
+    history: &dyn HistoryStore,
     budget: Option<usize>,
 ) -> i32 {
     let Some((command, cmd_args)) = args.split_first() else {
@@ -33,13 +35,14 @@ pub fn dispatch(
     let mut lines = fastpath::lines_from(&result.stdout);
     lines.extend(fastpath::lines_from(&result.stderr));
     let filtered: Vec<String> = lines
-        .into_iter()
+        .iter()
         .filter(|line| {
             matches!(
                 relevance::classify(line).0,
                 ChunkKind::Error | ChunkKind::Warning
             )
         })
+        .cloned()
         .collect();
 
     let rendered = match render_optionally_budgeted(
@@ -48,6 +51,11 @@ pub fn dispatch(
         &ApproximateCounter,
         "any errors/warnings",
         stderr,
+        history,
+        "err",
+        command,
+        cmd_args,
+        &lines.join("\n"),
     ) {
         Ok(rendered) => rendered,
         Err(code) => return code,

@@ -1,7 +1,9 @@
+use std::borrow::Cow;
 use std::io::Write;
 
 use crate::budget::tokenizer::ApproximateCounter;
 use crate::compression::{write_output, WriteOutcome};
+use crate::history::{record_savings, HistoryStore};
 use crate::verbs::filesystem_budget::{truncate_head_tail, TooSmall};
 
 /// `stk read <file>`: a native, `Budget`-aware file reader (not a `cat` wrapper).
@@ -10,6 +12,7 @@ pub fn dispatch(
     args: &[String],
     stdout: &mut dyn Write,
     stderr: &mut dyn Write,
+    history: &dyn HistoryStore,
     budget: Option<usize>,
 ) -> i32 {
     let Some(path) = args.first() else {
@@ -25,10 +28,10 @@ pub fn dispatch(
         }
     };
 
-    let rendered = match budget {
-        None => content,
+    let rendered: Cow<str> = match budget {
+        None => Cow::Borrowed(&content),
         Some(budget) => match truncate_head_tail(&content, budget, &ApproximateCounter) {
-            Ok(rendered) => rendered,
+            Ok(rendered) => Cow::Owned(rendered),
             Err(TooSmall { minimum }) => {
                 let _ = writeln!(
                     stderr,
@@ -38,6 +41,16 @@ pub fn dispatch(
             }
         },
     };
+
+    record_savings(
+        history,
+        &ApproximateCounter,
+        "read",
+        "",
+        args,
+        &content,
+        &rendered,
+    );
 
     match write_output(stdout, rendered.as_bytes()) {
         Ok(()) | Err(WriteOutcome::BrokenPipe) => 0,

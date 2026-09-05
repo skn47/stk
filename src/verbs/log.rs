@@ -1,6 +1,7 @@
 use std::io::{Read, Write};
 
 use crate::compression;
+use crate::history::HistoryStore;
 use crate::scoring::relevance;
 
 /// `stk log [FILE]`: filters/deduplicates log output (file or stdin, matching real
@@ -11,6 +12,7 @@ pub fn dispatch(
     mut stdin: impl Read,
     stdout: &mut dyn Write,
     stderr: &mut dyn Write,
+    history: &dyn HistoryStore,
     budget: Option<usize>,
 ) -> i32 {
     let input = match args.first() {
@@ -31,5 +33,13 @@ pub fn dispatch(
         }
     };
 
-    compression::compress_stdin(&input, stdout, stderr, budget, relevance::classify)
+    compression::compress_stdin(
+        "log",
+        &input,
+        stdout,
+        stderr,
+        history,
+        budget,
+        relevance::classify,
+    )
 }

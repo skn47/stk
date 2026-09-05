@@ -1,6 +1,7 @@
 use std::io::Write;
 
 use crate::budget::tokenizer::TokenCounter;
+use crate::history::{record_savings, HistoryStore};
 
 #[derive(Debug)]
 pub struct TooSmall {
@@ -28,15 +29,26 @@ fn largest_k_that_fits(max_k: usize, fits: impl Fn(usize) -> bool) -> usize {
 /// Applies `Budget` truncation if given (else joins everything), writing a clear error
 /// to `stderr` and returning the exit code to use if the budget is below the floor.
 /// Shared by every verb whose content is a flat, sequentially-truncatable line list
-/// (`grep`/`find`/`diff`/`err`/`summary`).
+/// (`grep`/`find`/`diff`/`err`/`summary`); also records savings for every one of them.
+/// `input` is the raw material this verb started from -- for `grep`/`find` that's just
+/// `items` again (their search results have no earlier "raw" stage), but for `err`,
+/// `summary`, and `diff` it's the un-filtered/un-summarized/un-condensed text `items`
+/// was derived from, so recorded savings reflect this verb's real compression, not just
+/// its final budget truncation.
+#[allow(clippy::too_many_arguments)]
 pub fn render_optionally_budgeted(
     items: &[String],
     budget: Option<usize>,
     counter: &dyn TokenCounter,
     what: &str,
     stderr: &mut dyn Write,
+    history: &dyn HistoryStore,
+    verb: &str,
+    command: &str,
+    args: &[String],
+    input: &str,
 ) -> Result<String, i32> {
-    match budget {
+    let rendered = match budget {
         None => Ok(terminated(items.join("\n"))),
         Some(budget) => match truncate_sequential(items, budget, counter) {
             Ok(rendered) => Ok(rendered),
@@ -48,7 +60,11 @@ pub fn render_optionally_budgeted(
                 Err(2)
             }
         },
+    };
+    if let Ok(rendered) = &rendered {
+        record_savings(history, counter, verb, command, args, input, rendered);
     }
+    rendered
 }
 
 fn omission_marker(count: usize) -> String {

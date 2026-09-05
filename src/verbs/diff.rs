@@ -2,6 +2,7 @@ use std::io::{Read, Write};
 
 use crate::budget::tokenizer::ApproximateCounter;
 use crate::compression::{write_output, WriteOutcome};
+use crate::history::HistoryStore;
 use crate::verbs::filesystem_budget::render_optionally_budgeted;
 
 /// `stk diff [FILE|-]`: condenses existing unified-diff text down to hunk headers and
@@ -11,6 +12,7 @@ pub fn dispatch(
     mut stdin: impl Read,
     stdout: &mut dyn Write,
     stderr: &mut dyn Write,
+    history: &dyn HistoryStore,
     budget: Option<usize>,
 ) -> i32 {
     let content = match args.first() {
@@ -39,6 +41,11 @@ pub fn dispatch(
         &ApproximateCounter,
         "any diff content",
         stderr,
+        history,
+        "diff",
+        "",
+        args,
+        &content,
     ) {
         Ok(rendered) => rendered,
         Err(code) => return code,

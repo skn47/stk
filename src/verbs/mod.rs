@@ -5,6 +5,7 @@ pub mod err;
 mod file_walk;
 mod filesystem_budget;
 pub mod find;
+pub mod gain;
 pub mod grep;
 pub mod init;
 pub mod json;

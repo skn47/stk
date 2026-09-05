@@ -3,6 +3,7 @@ use std::path::Path;
 
 use crate::budget::tokenizer::ApproximateCounter;
 use crate::compression::{write_output, WriteOutcome};
+use crate::history::HistoryStore;
 use crate::verbs::file_walk::walk_files;
 use crate::verbs::filesystem_budget::render_optionally_budgeted;
 
@@ -12,6 +13,7 @@ pub fn dispatch(
     args: &[String],
     stdout: &mut dyn Write,
     stderr: &mut dyn Write,
+    history: &dyn HistoryStore,
     budget: Option<usize>,
 ) -> i32 {
     let mut path = None;
@@ -43,6 +45,11 @@ pub fn dispatch(
         &ApproximateCounter,
         "any results",
         stderr,
+        history,
+        "find",
+        "",
+        args,
+        &entries.join("\n"),
     ) {
         Ok(rendered) => rendered,
         Err(code) => return code,

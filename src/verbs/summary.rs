@@ -5,6 +5,7 @@ use crate::capture::executor::CommandExecutor;
 use crate::chunk::ChunkKind;
 use crate::compression::{write_output, WriteOutcome};
 use crate::fastpath;
+use crate::history::HistoryStore;
 use crate::scoring::relevance;
 use crate::verbs::filesystem_budget::render_optionally_budgeted;
 
@@ -15,6 +16,7 @@ pub fn dispatch(
     stdout: &mut dyn Write,
     stderr: &mut dyn Write,
     executor: &dyn CommandExecutor,
+    history: &dyn HistoryStore,
     budget: Option<usize>,
 ) -> i32 {
     let Some((command, cmd_args)) = args.split_first() else {
@@ -67,6 +69,11 @@ pub fn dispatch(
         &ApproximateCounter,
         "a summary",
         stderr,
+        history,
+        "summary",
+        command,
+        cmd_args,
+        &lines.join("\n"),
     ) {
         Ok(rendered) => rendered,
         Err(code) => return code,

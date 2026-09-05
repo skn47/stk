@@ -4,6 +4,7 @@ use serde_json::Value;
 
 use crate::budget::tokenizer::ApproximateCounter;
 use crate::compression::{write_output, WriteOutcome};
+use crate::history::{record_savings, HistoryStore};
 use crate::verbs::filesystem_budget::{truncate_chars_head_tail, TooSmall};
 
 /// `stk json <FILE> [--keys-only]`: compacts a JSON file (minified by default, or
@@ -12,6 +13,7 @@ pub fn dispatch(
     args: &[String],
     stdout: &mut dyn Write,
     stderr: &mut dyn Write,
+    history: &dyn HistoryStore,
     budget: Option<usize>,
 ) -> i32 {
     let mut path = None;
@@ -68,6 +70,16 @@ pub fn dispatch(
             }
         },
     };
+
+    record_savings(
+        history,
+        &ApproximateCounter,
+        "json",
+        "",
+        args,
+        &content,
+        &rendered,
+    );
 
     match write_output(stdout, format!("{rendered}\n").as_bytes()) {
         Ok(()) | Err(WriteOutcome::BrokenPipe) => 0,

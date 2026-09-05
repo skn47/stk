@@ -32,44 +32,55 @@ pub fn run(
         Some((command, rest)) if command == "pipe" => {
             verbs::pipe::dispatch(rest, stdin, stdout, stderr)
         }
-        Some((command, rest)) if command == "compile" => {
-            verbs::compile::dispatch(rest, stdin, stdout, stderr, executor, options.budget)
-        }
+        Some((command, rest)) if command == "compile" => verbs::compile::dispatch(
+            rest,
+            stdin,
+            stdout,
+            stderr,
+            executor,
+            history,
+            options.budget,
+        ),
         Some((command, rest)) if command == "read" => {
-            verbs::read::dispatch(rest, stdout, stderr, options.budget)
+            verbs::read::dispatch(rest, stdout, stderr, history, options.budget)
         }
         Some((command, rest)) if command == "grep" => {
-            verbs::grep::dispatch(rest, stdout, stderr, options.budget)
+            verbs::grep::dispatch(rest, stdout, stderr, history, options.budget)
         }
         Some((command, rest)) if command == "find" => {
-            verbs::find::dispatch(rest, stdout, stderr, options.budget)
+            verbs::find::dispatch(rest, stdout, stderr, history, options.budget)
         }
         Some((command, rest)) if command == "log" => {
-            verbs::log::dispatch(rest, stdin, stdout, stderr, options.budget)
+            verbs::log::dispatch(rest, stdin, stdout, stderr, history, options.budget)
         }
         Some((command, rest)) if command == "err" => {
-            verbs::err::dispatch(rest, stdout, stderr, executor, options.budget)
+            verbs::err::dispatch(rest, stdout, stderr, executor, history, options.budget)
         }
         Some((command, rest)) if command == "summary" => {
-            verbs::summary::dispatch(rest, stdout, stderr, executor, options.budget)
+            verbs::summary::dispatch(rest, stdout, stderr, executor, history, options.budget)
         }
         Some((command, rest)) if command == "diff" => {
-            verbs::diff::dispatch(rest, stdin, stdout, stderr, options.budget)
+            verbs::diff::dispatch(rest, stdin, stdout, stderr, history, options.budget)
         }
         Some((command, rest)) if command == "json" => {
-            verbs::json::dispatch(rest, stdout, stderr, options.budget)
+            verbs::json::dispatch(rest, stdout, stderr, history, options.budget)
         }
         Some((command, rest)) if command == "config" => {
             verbs::config::dispatch(rest, stdout, stderr, options.budget)
         }
         Some((command, rest)) if command == "init" => verbs::init::dispatch(rest, stdout, stderr),
+        Some((command, rest)) if command == "gain" => {
+            verbs::gain::dispatch(rest, stdout, stderr, history)
+        }
         Some((command, rest)) => match specialists::lookup(command) {
             Some(classify) => compression::execute_and_compress(
+                command,
                 command,
                 rest,
                 stdout,
                 stderr,
                 executor,
+                history,
                 options.budget,
                 classify,
             ),

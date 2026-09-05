@@ -2,6 +2,7 @@ use std::io::{Read, Write};
 
 use crate::capture::executor::CommandExecutor;
 use crate::compression;
+use crate::history::HistoryStore;
 use crate::scoring::relevance;
 
 /// `stk compile [CMD [ARGS...]]`: runs a command (buffered) or, given none, reads stdin.
@@ -13,15 +14,18 @@ pub fn dispatch(
     stdout: &mut dyn Write,
     stderr: &mut dyn Write,
     executor: &dyn CommandExecutor,
+    history: &dyn HistoryStore,
     budget: Option<usize>,
 ) -> i32 {
     match args.split_first() {
         Some((command, cmd_args)) => compression::execute_and_compress(
+            "compile",
             command,
             cmd_args,
             stdout,
             stderr,
             executor,
+            history,
             budget,
             relevance::classify,
         ),
@@ -31,7 +35,15 @@ pub fn dispatch(
                 let _ = writeln!(stderr, "stk: failed to read stdin: {err}");
                 return 1;
             }
-            compression::compress_stdin(&input, stdout, stderr, budget, relevance::classify)
+            compression::compress_stdin(
+                "compile",
+                &input,
+                stdout,
+                stderr,
+                history,
+                budget,
+                relevance::classify,
+            )
         }
     }
 }
@@ -40,6 +52,7 @@ pub fn dispatch(
 mod tests {
     use super::*;
     use crate::capture::executor::{ExecutionResult, FakeExecutor};
+    use crate::history::FakeHistoryStore;
     use std::io::ErrorKind;
 
     fn run(
@@ -50,6 +63,7 @@ mod tests {
     ) -> (i32, String, String) {
         let mut stdout = Vec::new();
         let mut stderr = Vec::new();
+        let history = FakeHistoryStore::new();
         let args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
         let exit_code = dispatch(
             &args,
@@ -57,6 +71,7 @@ mod tests {
             &mut stdout,
             &mut stderr,
             executor,
+            &history,
             budget,
         );
         (
@@ -130,6 +145,7 @@ mod tests {
         });
         let mut stdout = BrokenPipeWriter;
         let mut stderr = Vec::new();
+        let history = FakeHistoryStore::new();
 
         let exit_code = dispatch(
             &["cargo".to_string(), "build".to_string()],
@@ -137,6 +153,7 @@ mod tests {
             &mut stdout,
             &mut stderr,
             &executor,
+            &history,
             None,
         );
 
