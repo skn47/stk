@@ -1,6 +1,6 @@
 # stk
 
-`stk` is a stateful context compiler for coding agents: it turns noisy shell/tool output into the smallest high-value context an agent needs, within an explicit token budget. This glossary covers terms specific to STK's own domain — see `../stk_implementation_overview.md` for the full design.
+`stk` is a stateful context compiler for coding agents: it turns noisy shell/tool output into the smallest high-value context an agent needs, within an explicit token budget. This glossary covers terms specific to STK's own domain — see `.scratch/stk-first-release/spec.md` and `docs/adr/` for the design decisions behind them.
 
 ## Language
 
