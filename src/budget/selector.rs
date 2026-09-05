@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::chunk::{Chunk, ChunkId, ChunkKind, Priority, SourceMetadata, Stream};
+use crate::chunk::{Chunk, ChunkId, ChunkKind, Classifier, Priority, SourceMetadata, Stream};
 use crate::scoring::relevance;
 
 use super::tokenizer::TokenCounter;
@@ -33,14 +33,22 @@ pub fn select(
     stderr_lines: &[String],
     budget: usize,
     counter: &dyn TokenCounter,
+    classify: Classifier,
 ) -> Result<BudgetedOutput, BudgetError> {
     let mut next_id = 0usize;
-    let mut chunks = build_chunks(stdout_lines, Stream::Stdout, &mut next_id, counter);
+    let mut chunks = build_chunks(
+        stdout_lines,
+        Stream::Stdout,
+        &mut next_id,
+        counter,
+        classify,
+    );
     chunks.extend(build_chunks(
         stderr_lines,
         Stream::Stderr,
         &mut next_id,
         counter,
+        classify,
     ));
 
     // Worst case: both streams independently need their own shrink marker and their own
@@ -146,13 +154,14 @@ fn build_chunks(
     stream: Stream,
     next_id: &mut usize,
     counter: &dyn TokenCounter,
+    classify: Classifier,
 ) -> Vec<Chunk> {
     let total = lines.len();
     lines
         .iter()
         .enumerate()
         .map(|(line_number, text)| {
-            let (kind, priority) = relevance::classify(text);
+            let (kind, priority) = classify(text);
             let id = ChunkId(*next_id);
             *next_id += 1;
             Chunk {
@@ -317,7 +326,14 @@ mod tests {
             "warning: unused variable",
             "note: some verbose detail nobody needs",
         ]);
-        let out = select(&stdout_lines, &[], 100, &ApproximateCounter).unwrap();
+        let out = select(
+            &stdout_lines,
+            &[],
+            100,
+            &ApproximateCounter,
+            relevance::classify,
+        )
+        .unwrap();
         let rendered = String::from_utf8(out.stdout).unwrap();
 
         assert!(rendered.contains("error[E0308]"));
@@ -329,7 +345,14 @@ mod tests {
         let stdout_lines = lines(&[&long_error]);
 
         // Big enough to pass the floor, far too small to hold the whole error.
-        let out = select(&stdout_lines, &[], 65, &ApproximateCounter).unwrap();
+        let out = select(
+            &stdout_lines,
+            &[],
+            65,
+            &ApproximateCounter,
+            relevance::classify,
+        )
+        .unwrap();
         let rendered = String::from_utf8(out.stdout).unwrap();
 
         assert!(
@@ -349,7 +372,13 @@ mod tests {
 
     #[test]
     fn a_budget_below_the_floor_is_refused_not_rendered() {
-        let result = select(&lines(&["error: anything"]), &[], 1, &ApproximateCounter);
+        let result = select(
+            &lines(&["error: anything"]),
+            &[],
+            1,
+            &ApproximateCounter,
+            relevance::classify,
+        );
         assert!(matches!(result, Err(BudgetError::TooSmall { .. })));
     }
 
@@ -361,7 +390,14 @@ mod tests {
             "note: filler line two that is not important at all",
             "note: filler line three that is not important at all",
         ]);
-        let out = select(&stdout_lines, &[], 65, &ApproximateCounter).unwrap();
+        let out = select(
+            &stdout_lines,
+            &[],
+            65,
+            &ApproximateCounter,
+            relevance::classify,
+        )
+        .unwrap();
         let rendered = String::from_utf8(out.stdout).unwrap();
 
         assert!(rendered.contains("error: the one thing that matters"));
@@ -374,7 +410,14 @@ mod tests {
     #[test]
     fn nothing_dropped_means_no_omission_marker_at_all() {
         let stdout_lines = lines(&["error: small", "note: also small"]);
-        let out = select(&stdout_lines, &[], 500, &ApproximateCounter).unwrap();
+        let out = select(
+            &stdout_lines,
+            &[],
+            500,
+            &ApproximateCounter,
+            relevance::classify,
+        )
+        .unwrap();
         let rendered = String::from_utf8(out.stdout).unwrap();
 
         assert!(!rendered.contains("[stk: omitted"));
@@ -387,7 +430,13 @@ mod tests {
         let stdout_lines = lines(&[&long_error]);
         let stderr_lines = lines(&[&long_error]);
 
-        let result = select(&stdout_lines, &stderr_lines, 70, &ApproximateCounter);
+        let result = select(
+            &stdout_lines,
+            &stderr_lines,
+            70,
+            &ApproximateCounter,
+            relevance::classify,
+        );
         assert!(
             result.is_ok(),
             "two streams each independently needing a shrink marker must not exceed the \
@@ -402,7 +451,14 @@ mod tests {
             "note: stderr filler one that nobody needs at all",
             "note: stderr filler two that nobody needs at all",
         ]);
-        let out = select(&stdout_lines, &stderr_lines, 65, &ApproximateCounter).unwrap();
+        let out = select(
+            &stdout_lines,
+            &stderr_lines,
+            65,
+            &ApproximateCounter,
+            relevance::classify,
+        )
+        .unwrap();
         let stdout_rendered = String::from_utf8(out.stdout).unwrap();
         let stderr_rendered = String::from_utf8(out.stderr).unwrap();
 

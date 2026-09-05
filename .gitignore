@@ -1,1 +1,3 @@
 /target
+tests/fixtures/cargo_projects/*/target
+tests/fixtures/cargo_projects/*/Cargo.lock

@@ -2,6 +2,10 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ChunkId(pub usize);
 
+/// Classifies one line into a `ChunkKind`/`Priority` pair. The generic pipeline and each
+/// Specialist each supply their own, letting the same `Budget` selection code work for all.
+pub type Classifier = fn(&str) -> (ChunkKind, Priority);
+
 /// P0 is mandatory; P1-P5 are optional, packed into the budget by score. Only
 /// P0/P2/P3/P5 are reachable from the generic (no-Specialist) classifier for now.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

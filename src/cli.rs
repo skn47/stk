@@ -1,7 +1,9 @@
 use std::io::{Read, Write};
 
 use crate::capture::executor::CommandExecutor;
+use crate::compression;
 use crate::history::HistoryStore;
+use crate::specialists;
 use crate::verbs;
 
 /// Entry point every `stk` invocation goes through. Writes to `stdout`/`stderr` as output
@@ -33,7 +35,18 @@ pub fn run(
         Some((command, rest)) if command == "compile" => {
             verbs::compile::dispatch(rest, stdin, stdout, stderr, executor, options.budget)
         }
-        Some((command, _)) => unsupported_command(command, stderr),
+        Some((command, rest)) => match specialists::lookup(command) {
+            Some(classify) => compression::execute_and_compress(
+                command,
+                rest,
+                stdout,
+                stderr,
+                executor,
+                options.budget,
+                classify,
+            ),
+            None => unsupported_command(command, stderr),
+        },
         None => no_command_given(stderr),
     }
 }
