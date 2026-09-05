@@ -1,51 +1,52 @@
 use std::io::Write;
 
-use crate::capture::executor::{CommandExecutor, ExitInfo};
+use crate::capture::executor::CommandExecutor;
+use crate::verbs::passthrough;
 
 /// `stk run [ARGS...]` / `stk run -c COMMAND`: raw passthrough, no filtering, no tracking.
 pub fn dispatch(args: &[String], stderr: &mut dyn Write, executor: &dyn CommandExecutor) -> i32 {
     let (command, cmd_args) = match parse(args) {
         Ok(parsed) => parsed,
-        Err(message) => {
-            let _ = writeln!(stderr, "stk: {message}");
+        Err(ParseError::NoCommand) => return passthrough::no_command_error("run", stderr),
+        Err(ParseError::MissingCommandString) => {
+            let _ = writeln!(stderr, "stk: run -c requires a command string");
             return 2;
         }
     };
 
     match executor.execute_inherited(&command, &cmd_args) {
-        Ok(info) => exit_code_for(info),
-        Err(err) => {
-            let _ = writeln!(stderr, "stk: failed to run '{command}': {err}");
-            1
-        }
+        Ok(info) => info.to_process_exit_code(),
+        Err(err) => passthrough::exec_error(&command, &err, stderr),
     }
 }
 
-fn parse(args: &[String]) -> Result<(String, Vec<String>), &'static str> {
+enum ParseError {
+    NoCommand,
+    MissingCommandString,
+}
+
+fn parse(args: &[String]) -> Result<(String, Vec<String>), ParseError> {
     match args.first().map(String::as_str) {
         Some("-c") | Some("--command") => match args.get(1) {
-            Some(command_string) => Ok((
-                "sh".to_string(),
-                vec!["-c".to_string(), command_string.clone()],
-            )),
-            None => Err("run -c requires a command string"),
+            // Extra args after the command string become sh's $0, $1, ... — matching
+            // `sh -c command_string [command_name [arg...]]` semantics, not just the
+            // command string alone.
+            Some(command_string) => {
+                let mut sh_args = vec!["-c".to_string(), command_string.clone()];
+                sh_args.extend(args[2..].iter().cloned());
+                Ok(("sh".to_string(), sh_args))
+            }
+            None => Err(ParseError::MissingCommandString),
         },
         Some(_) => Ok((args[0].clone(), args[1..].to_vec())),
-        None => Err("run requires a command"),
-    }
-}
-
-fn exit_code_for(info: ExitInfo) -> i32 {
-    match info.terminating_signal {
-        Some(signal) => 128 + signal,
-        None => info.exit_code,
+        None => Err(ParseError::NoCommand),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::capture::executor::FakeExecutor;
+    use crate::capture::executor::{ExitInfo, FakeExecutor};
 
     #[test]
     fn positional_args_are_executed_directly_not_through_a_shell() {
@@ -80,6 +81,36 @@ mod tests {
             vec![(
                 "sh".to_string(),
                 vec!["-c".to_string(), "echo hi".to_string()]
+            )]
+        );
+    }
+
+    #[test]
+    fn dash_c_forwards_trailing_args_as_shell_positional_params() {
+        let executor = FakeExecutor::new();
+        let mut stderr = Vec::new();
+
+        dispatch(
+            &[
+                "-c".to_string(),
+                "echo $1".to_string(),
+                "argv0".to_string(),
+                "hello".to_string(),
+            ],
+            &mut stderr,
+            &executor,
+        );
+
+        assert_eq!(
+            executor.invocations(),
+            vec![(
+                "sh".to_string(),
+                vec![
+                    "-c".to_string(),
+                    "echo $1".to_string(),
+                    "argv0".to_string(),
+                    "hello".to_string()
+                ]
             )]
         );
     }

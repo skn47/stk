@@ -26,6 +26,16 @@ pub struct ExitInfo {
     pub terminating_signal: Option<i32>,
 }
 
+impl ExitInfo {
+    /// The process exit code `stk` itself should exit with: `128+signal` on signal death.
+    pub fn to_process_exit_code(self) -> i32 {
+        match self.terminating_signal {
+            Some(signal) => 128 + signal,
+            None => self.exit_code,
+        }
+    }
+}
+
 /// Abstracts child-process spawning so the CLI dispatch logic can be tested without
 /// actually spawning real commands like `cargo` or `git`.
 pub trait CommandExecutor {
@@ -60,6 +70,12 @@ impl CommandExecutor for RealExecutor {
     }
 
     fn execute_inherited(&self, command: &str, args: &[String]) -> io::Result<ExitInfo> {
+        // Registered before spawning, not after: a signal arriving in the gap between
+        // spawn() and forwarder setup would otherwise go unforwarded. If this fails (e.g.
+        // fd exhaustion), degrade to no forwarding rather than not running the child at all.
+        #[cfg(unix)]
+        let forwarder = SignalForwarder::spawn().ok();
+
         let mut child = Command::new(command)
             .args(args)
             .stdin(Stdio::inherit())
@@ -67,10 +83,10 @@ impl CommandExecutor for RealExecutor {
             .stderr(Stdio::inherit())
             .spawn()?;
 
-        // If this fails (e.g. fd exhaustion), degrade to no signal forwarding rather than
-        // leaking the already-spawned child by returning early without waiting on it.
         #[cfg(unix)]
-        let forwarder = SignalForwarder::spawn(child.id()).ok();
+        if let Some(forwarder) = &forwarder {
+            forwarder.set_child_pid(child.id());
+        }
 
         let status = child.wait()?;
 

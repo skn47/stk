@@ -1,9 +1,11 @@
 use stk::capture::executor::FakeExecutor;
 use stk::cli;
+use stk::history::FakeHistoryStore;
 
 #[test]
 fn unrecognized_command_is_rejected_with_nonzero_exit() {
     let executor = FakeExecutor::new();
+    let history = FakeHistoryStore::new();
     let mut stdout = Vec::new();
     let mut stderr = Vec::new();
 
@@ -13,6 +15,7 @@ fn unrecognized_command_is_rejected_with_nonzero_exit() {
         &mut stdout,
         &mut stderr,
         &executor,
+        &history,
     );
 
     assert_ne!(exit_code, 0);
@@ -27,10 +30,18 @@ fn unrecognized_command_is_rejected_with_nonzero_exit() {
 #[test]
 fn no_command_given_is_also_rejected() {
     let executor = FakeExecutor::new();
+    let history = FakeHistoryStore::new();
     let mut stdout = Vec::new();
     let mut stderr = Vec::new();
 
-    let exit_code = cli::run(&[], std::io::empty(), &mut stdout, &mut stderr, &executor);
+    let exit_code = cli::run(
+        &[],
+        std::io::empty(),
+        &mut stdout,
+        &mut stderr,
+        &executor,
+        &history,
+    );
 
     assert_ne!(exit_code, 0);
     assert!(!String::from_utf8(stderr).unwrap().is_empty());
@@ -39,6 +50,7 @@ fn no_command_given_is_also_rejected() {
 #[test]
 fn no_child_process_is_spawned_for_an_unsupported_command() {
     let executor = FakeExecutor::new();
+    let history = FakeHistoryStore::new();
     let mut stdout = Vec::new();
     let mut stderr = Vec::new();
 
@@ -48,6 +60,7 @@ fn no_child_process_is_spawned_for_an_unsupported_command() {
         &mut stdout,
         &mut stderr,
         &executor,
+        &history,
     );
 
     assert_eq!(

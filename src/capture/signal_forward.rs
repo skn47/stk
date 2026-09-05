@@ -2,44 +2,67 @@
 //! (`run`/`proxy`) whose child does not automatically receive them via the terminal's
 //! process-group delivery (e.g. when the signal is sent directly via `kill <stk-pid>`).
 
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use signal_hook::consts::signal::{SIGINT, SIGTERM};
 use signal_hook::iterator::{Handle, Signals};
 
+enum Target {
+    /// The child hasn't been spawned yet: a signal arriving now waits (briefly) rather
+    /// than being dropped, so registering the handler before spawning closes the race
+    /// window that existed when the child's pid was supplied at construction time.
+    AwaitingChild,
+    Active(libc::pid_t),
+    /// The child has been reaped: never signal its pid again, since the OS may have
+    /// already reused it for an unrelated process.
+    Done,
+}
+
 pub struct SignalForwarder {
     handle: Handle,
     thread: Option<std::thread::JoinHandle<()>>,
-    child_reaped: Arc<AtomicBool>,
+    target: Arc<Mutex<Target>>,
 }
 
 impl SignalForwarder {
-    pub fn spawn(child_pid: u32) -> std::io::Result<Self> {
+    /// Registers the signal handler immediately, before any child exists. Call
+    /// [`set_child_pid`](Self::set_child_pid) once the child is actually spawned.
+    pub fn spawn() -> std::io::Result<Self> {
         let mut signals = Signals::new([SIGINT, SIGTERM])?;
         let handle = signals.handle();
-        let child_reaped = Arc::new(AtomicBool::new(false));
-        let thread_child_reaped = Arc::clone(&child_reaped);
+        let target = Arc::new(Mutex::new(Target::AwaitingChild));
+        let thread_target = Arc::clone(&target);
         let thread = std::thread::spawn(move || {
             for sig in &mut signals {
-                // Best-effort: narrows, but can't fully close, the race against the OS
-                // reusing `child_pid` for an unrelated process after it's been reaped.
-                if !thread_child_reaped.load(Ordering::SeqCst) {
-                    unsafe {
-                        libc::kill(child_pid as libc::pid_t, sig);
+                loop {
+                    match *thread_target.lock().unwrap() {
+                        Target::Active(pid) => {
+                            unsafe {
+                                libc::kill(pid, sig);
+                            }
+                            break;
+                        }
+                        Target::Done => break,
+                        Target::AwaitingChild => {}
                     }
+                    std::thread::sleep(Duration::from_millis(5));
                 }
             }
         });
         Ok(Self {
             handle,
             thread: Some(thread),
-            child_reaped,
+            target,
         })
     }
 
+    pub fn set_child_pid(&self, pid: u32) {
+        *self.target.lock().unwrap() = Target::Active(pid as libc::pid_t);
+    }
+
     pub fn mark_child_reaped(&self) {
-        self.child_reaped.store(true, Ordering::SeqCst);
+        *self.target.lock().unwrap() = Target::Done;
     }
 }
 

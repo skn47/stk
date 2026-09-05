@@ -60,6 +60,16 @@ fn run_dash_c_goes_through_a_shell() {
 }
 
 #[test]
+fn run_dash_c_forwards_trailing_args_as_shell_positional_params() {
+    let output = Command::new(stk_bin())
+        .args(["run", "-c", "echo \"$1\"", "argv0", "hello"])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.stdout, b"hello\n");
+}
+
+#[test]
 fn run_with_no_command_is_a_usage_error() {
     let output = Command::new(stk_bin()).arg("run").output().unwrap();
     assert!(!output.status.success());

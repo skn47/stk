@@ -4,15 +4,24 @@ use std::process::ExitCode;
 
 use stk::capture::executor::RealExecutor;
 use stk::cli;
+use stk::history::FileHistoryStore;
 
 fn main() -> ExitCode {
     let args: Vec<String> = env::args().skip(1).collect();
     let executor = RealExecutor;
+    let history = FileHistoryStore::at(FileHistoryStore::default_path());
 
     let mut stdout = io::stdout();
     let mut stderr = io::stderr();
 
-    let exit_code = cli::run(&args, io::stdin(), &mut stdout, &mut stderr, &executor);
+    let exit_code = cli::run(
+        &args,
+        io::stdin(),
+        &mut stdout,
+        &mut stderr,
+        &executor,
+        &history,
+    );
     // Clamp rather than cast: exit_code is signed and can exceed u8, and `as u8` would wrap silently.
     ExitCode::from(exit_code.clamp(0, 255) as u8)
 }

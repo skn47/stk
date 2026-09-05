@@ -1,6 +1,7 @@
 use std::io::{Read, Write};
 
 use crate::capture::executor::CommandExecutor;
+use crate::history::HistoryStore;
 use crate::verbs;
 
 /// Entry point every `stk` invocation goes through. Writes to `stdout`/`stderr` as output
@@ -11,9 +12,13 @@ pub fn run(
     _stdout: &mut dyn Write,
     stderr: &mut dyn Write,
     executor: &dyn CommandExecutor,
+    history: &dyn HistoryStore,
 ) -> i32 {
     match args.split_first() {
         Some((command, rest)) if command == "run" => verbs::run::dispatch(rest, stderr, executor),
+        Some((command, rest)) if command == "proxy" => {
+            verbs::proxy::dispatch(rest, stderr, executor, history)
+        }
         Some((command, _)) => unsupported_command(command, stderr),
         None => no_command_given(stderr),
     }
