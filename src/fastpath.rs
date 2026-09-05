@@ -1,9 +1,10 @@
 use crate::aggregation::repetition;
 use crate::normalize::{ansi, boilerplate, long_lines, whitespace};
 
-/// The Janitor + Aggregator fast path: deterministic cleanup, no scoring or budget
-/// selection (that's layered on top of this later).
-pub fn run(input: &[u8]) -> Vec<u8> {
+/// The Janitor + Aggregator fast-path transforms, stopping at the line-sequence stage
+/// (before final rendering) so the `Budget`-aware pipeline can chunk and select from the
+/// same cleaned-up lines `run` would otherwise just join and print directly.
+pub fn lines_from(input: &[u8]) -> Vec<String> {
     if input.is_empty() {
         return Vec::new();
     }
@@ -19,7 +20,16 @@ pub fn run(input: &[u8]) -> Vec<u8> {
     let lines = whitespace::normalize(lines);
     let lines = repetition::collapse(lines);
     let lines = boilerplate::filter(lines);
-    let lines = long_lines::truncate(lines);
+    long_lines::truncate(lines)
+}
+
+/// The Janitor + Aggregator fast path: deterministic cleanup, no scoring or budget
+/// selection (that's layered on top of this later).
+pub fn run(input: &[u8]) -> Vec<u8> {
+    let lines = lines_from(input);
+    if lines.is_empty() {
+        return Vec::new();
+    }
 
     let mut out = lines.join("\n");
     out.push('\n');

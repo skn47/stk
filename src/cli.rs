@@ -14,7 +14,15 @@ pub fn run(
     executor: &dyn CommandExecutor,
     history: &dyn HistoryStore,
 ) -> i32 {
-    match args.split_first() {
+    let (options, rest) = match parse_global_options(args) {
+        Ok(parsed) => parsed,
+        Err(message) => {
+            let _ = writeln!(stderr, "stk: {message}");
+            return 2;
+        }
+    };
+
+    match rest.split_first() {
         Some((command, rest)) if command == "run" => verbs::run::dispatch(rest, stderr, executor),
         Some((command, rest)) if command == "proxy" => {
             verbs::proxy::dispatch(rest, stderr, executor, history)
@@ -23,11 +31,46 @@ pub fn run(
             verbs::pipe::dispatch(rest, stdin, stdout, stderr)
         }
         Some((command, rest)) if command == "compile" => {
-            verbs::compile::dispatch(rest, stdin, stdout, stderr, executor)
+            verbs::compile::dispatch(rest, stdin, stdout, stderr, executor, options.budget)
         }
         Some((command, _)) => unsupported_command(command, stderr),
         None => no_command_given(stderr),
     }
+}
+
+#[derive(Debug, Default)]
+struct GlobalOptions {
+    budget: Option<usize>,
+}
+
+/// Global options are recognized only before the subcommand (matching `rtk`). Rejects
+/// `--intent`/`--explain` rather than silently ignoring them: neither ships yet.
+fn parse_global_options(args: &[String]) -> Result<(GlobalOptions, &[String]), String> {
+    let mut options = GlobalOptions::default();
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--budget" => {
+                let value = args
+                    .get(i + 1)
+                    .ok_or_else(|| "--budget requires a value".to_string())?;
+                options.budget = Some(
+                    value
+                        .parse()
+                        .map_err(|_| format!("--budget value '{value}' is not a valid number"))?,
+                );
+                i += 2;
+            }
+            "--intent" | "--explain" => {
+                return Err(format!(
+                    "unrecognized flag '{}' (not implemented in this release)",
+                    args[i]
+                ));
+            }
+            _ => break,
+        }
+    }
+    Ok((options, &args[i..]))
 }
 
 fn unsupported_command(command: &str, stderr: &mut dyn Write) -> i32 {
@@ -41,4 +84,52 @@ fn unsupported_command(command: &str, stderr: &mut dyn Write) -> i32 {
 fn no_command_given(stderr: &mut dyn Write) -> i32 {
     let _ = writeln!(stderr, "stk: no command given (try 'stk --help')");
     2
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn budget_flag_is_parsed_and_stripped_before_the_subcommand() {
+        let args: Vec<String> = ["--budget", "500", "compile"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let (options, rest) = parse_global_options(&args).unwrap();
+        assert_eq!(options.budget, Some(500));
+        assert_eq!(rest, &["compile".to_string()]);
+    }
+
+    #[test]
+    fn no_global_options_leaves_args_untouched() {
+        let args: Vec<String> = ["run", "echo", "hi"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let (options, rest) = parse_global_options(&args).unwrap();
+        assert_eq!(options.budget, None);
+        assert_eq!(rest, args.as_slice());
+    }
+
+    #[test]
+    fn intent_and_explain_are_rejected() {
+        let args: Vec<String> = vec!["--intent".to_string(), "debug".to_string()];
+        assert!(parse_global_options(&args).is_err());
+
+        let args: Vec<String> = vec!["--explain".to_string()];
+        assert!(parse_global_options(&args).is_err());
+    }
+
+    #[test]
+    fn budget_missing_value_is_an_error() {
+        let args: Vec<String> = vec!["--budget".to_string()];
+        assert!(parse_global_options(&args).is_err());
+    }
+
+    #[test]
+    fn budget_non_numeric_value_is_an_error() {
+        let args: Vec<String> = vec!["--budget".to_string(), "abc".to_string()];
+        assert!(parse_global_options(&args).is_err());
+    }
 }

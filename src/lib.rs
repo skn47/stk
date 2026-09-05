@@ -1,7 +1,10 @@
 pub mod aggregation;
+pub mod budget;
 pub mod capture;
+pub mod chunk;
 pub mod cli;
 pub mod fastpath;
 pub mod history;
 pub mod normalize;
+pub mod scoring;
 pub mod verbs;
