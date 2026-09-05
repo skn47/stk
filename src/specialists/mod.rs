@@ -1,4 +1,5 @@
 pub mod cargo;
+pub mod git;
 
 use crate::chunk::Classifier;
 
@@ -7,6 +8,7 @@ use crate::chunk::Classifier;
 pub fn lookup(command: &str) -> Option<Classifier> {
     match command {
         "cargo" => Some(cargo::classify),
+        "git" => Some(git::classify),
         _ => None,
     }
 }
