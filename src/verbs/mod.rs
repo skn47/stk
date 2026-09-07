@@ -15,5 +15,6 @@ mod passthrough;
 pub mod pipe;
 pub mod proxy;
 pub mod read;
+pub mod rewrite;
 pub mod run;
 pub mod summary;
