@@ -1,7 +1,7 @@
-use std::io::{ErrorKind, Write};
-use std::path::{Path, PathBuf};
+use std::io::Write;
+use std::path::Path;
 
-use crate::config::settings::{self, PartialSettings};
+use crate::config::settings;
 
 /// `stk config [--create]`: shows the effective, precedence-resolved configuration, or
 /// creates the global config file with defaults if `--create` is given and none exists.
@@ -22,22 +22,28 @@ pub fn dispatch(
         }
     }
 
-    let global_path = global_config_path();
+    let global_path = settings::global_config_path();
 
     if create {
         return create_config(&global_path, stdout, stderr);
     }
 
-    let project_text = match read_config_file(&project_config_path(), stderr) {
+    let project_text = match settings::read_config_file(&settings::project_config_path()) {
         Ok(text) => text,
-        Err(code) => return code,
+        Err(err) => {
+            let _ = writeln!(stderr, "stk: {err}");
+            return 1;
+        }
     };
-    let global_text = match read_config_file(&global_path, stderr) {
+    let global_text = match settings::read_config_file(&global_path) {
         Ok(text) => text,
-        Err(code) => return code,
+        Err(err) => {
+            let _ = writeln!(stderr, "stk: {err}");
+            return 1;
+        }
     };
 
-    let env = match env_settings() {
+    let env = match settings::env_settings() {
         Ok(env) => env,
         Err(err) => {
             let _ = writeln!(stderr, "stk: {err}");
@@ -65,19 +71,6 @@ pub fn dispatch(
     0
 }
 
-/// `NotFound` means "this layer doesn't exist," not an error; any other read failure
-/// (permission denied, not valid UTF-8, ...) is surfaced rather than silently ignored.
-fn read_config_file(path: &Path, stderr: &mut dyn Write) -> Result<Option<String>, i32> {
-    match std::fs::read_to_string(path) {
-        Ok(text) => Ok(Some(text)),
-        Err(err) if err.kind() == ErrorKind::NotFound => Ok(None),
-        Err(err) => {
-            let _ = writeln!(stderr, "stk: failed to read '{}': {err}", path.display());
-            Err(1)
-        }
-    }
-}
-
 fn create_config(path: &Path, stdout: &mut dyn Write, stderr: &mut dyn Write) -> i32 {
     match settings::create_default_file(path) {
         Ok(true) => {
@@ -92,45 +85,5 @@ fn create_config(path: &Path, stdout: &mut dyn Write, stderr: &mut dyn Write) ->
             let _ = writeln!(stderr, "stk: failed to create '{}': {err}", path.display());
             1
         }
-    }
-}
-
-/// Matches `src/history.rs`'s `cache_dir()` fallback order: an unset `HOME` (a minimal
-/// container or cron job) must resolve to a stable absolute path, not a cwd-relative one.
-fn global_config_path() -> PathBuf {
-    if let Some(xdg) = std::env::var_os("XDG_CONFIG_HOME").filter(|v| !v.is_empty()) {
-        return PathBuf::from(xdg).join("stk").join("config.toml");
-    }
-    if let Some(home) = std::env::var_os("HOME") {
-        return PathBuf::from(home)
-            .join(".config")
-            .join("stk")
-            .join("config.toml");
-    }
-    std::env::temp_dir().join("stk-config").join("config.toml")
-}
-
-fn project_config_path() -> PathBuf {
-    PathBuf::from(".stk").join("config.toml")
-}
-
-/// Errors (rather than silently ignoring) on a malformed value, matching how a malformed
-/// *file* layer errors -- a typo'd env var should never be mistaken for "not set".
-fn env_settings() -> Result<PartialSettings, String> {
-    Ok(PartialSettings {
-        budget: parse_env("STK_BUDGET")?,
-        intent: std::env::var("STK_INTENT").ok(),
-        session_memory: parse_env("STK_SESSION_MEMORY")?,
-        session_ttl_minutes: parse_env("STK_SESSION_TTL_MINUTES")?,
-    })
-}
-
-fn parse_env<T: std::str::FromStr>(key: &str) -> Result<Option<T>, String> {
-    match std::env::var(key) {
-        Ok(value) => value
-            .parse()
-            .map(Some)
-            .map_err(|_| format!("invalid value for {key}: '{value}'")),
-        Err(_) => Ok(None),
     }
 }

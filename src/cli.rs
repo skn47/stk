@@ -2,6 +2,7 @@ use std::io::{Read, Write};
 
 use crate::capture::executor::CommandExecutor;
 use crate::compression;
+use crate::config::settings;
 use crate::history::HistoryStore;
 use crate::specialists;
 use crate::verbs;
@@ -32,38 +33,59 @@ pub fn run(
         Some((command, rest)) if command == "pipe" => {
             verbs::pipe::dispatch(rest, stdin, stdout, stderr)
         }
-        Some((command, rest)) if command == "compile" => verbs::compile::dispatch(
-            rest,
-            stdin,
-            stdout,
-            stderr,
-            executor,
-            history,
-            options.budget,
-        ),
+        Some((command, rest)) if command == "compile" => {
+            let Some(budget) = resolve_budget(options.budget, stderr) else {
+                return 2;
+            };
+            verbs::compile::dispatch(rest, stdin, stdout, stderr, executor, history, Some(budget))
+        }
         Some((command, rest)) if command == "read" => {
-            verbs::read::dispatch(rest, stdout, stderr, history, options.budget)
+            let Some(budget) = resolve_budget(options.budget, stderr) else {
+                return 2;
+            };
+            verbs::read::dispatch(rest, stdout, stderr, history, Some(budget))
         }
         Some((command, rest)) if command == "grep" => {
-            verbs::grep::dispatch(rest, stdout, stderr, history, options.budget)
+            let Some(budget) = resolve_budget(options.budget, stderr) else {
+                return 2;
+            };
+            verbs::grep::dispatch(rest, stdout, stderr, history, Some(budget))
         }
         Some((command, rest)) if command == "find" => {
-            verbs::find::dispatch(rest, stdout, stderr, history, options.budget)
+            let Some(budget) = resolve_budget(options.budget, stderr) else {
+                return 2;
+            };
+            verbs::find::dispatch(rest, stdout, stderr, history, Some(budget))
         }
         Some((command, rest)) if command == "log" => {
-            verbs::log::dispatch(rest, stdin, stdout, stderr, history, options.budget)
+            let Some(budget) = resolve_budget(options.budget, stderr) else {
+                return 2;
+            };
+            verbs::log::dispatch(rest, stdin, stdout, stderr, history, Some(budget))
         }
         Some((command, rest)) if command == "err" => {
-            verbs::err::dispatch(rest, stdout, stderr, executor, history, options.budget)
+            let Some(budget) = resolve_budget(options.budget, stderr) else {
+                return 2;
+            };
+            verbs::err::dispatch(rest, stdout, stderr, executor, history, Some(budget))
         }
         Some((command, rest)) if command == "summary" => {
-            verbs::summary::dispatch(rest, stdout, stderr, executor, history, options.budget)
+            let Some(budget) = resolve_budget(options.budget, stderr) else {
+                return 2;
+            };
+            verbs::summary::dispatch(rest, stdout, stderr, executor, history, Some(budget))
         }
         Some((command, rest)) if command == "diff" => {
-            verbs::diff::dispatch(rest, stdin, stdout, stderr, history, options.budget)
+            let Some(budget) = resolve_budget(options.budget, stderr) else {
+                return 2;
+            };
+            verbs::diff::dispatch(rest, stdin, stdout, stderr, history, Some(budget))
         }
         Some((command, rest)) if command == "json" => {
-            verbs::json::dispatch(rest, stdout, stderr, history, options.budget)
+            let Some(budget) = resolve_budget(options.budget, stderr) else {
+                return 2;
+            };
+            verbs::json::dispatch(rest, stdout, stderr, history, Some(budget))
         }
         Some((command, rest)) if command == "config" => {
             verbs::config::dispatch(rest, stdout, stderr, options.budget)
@@ -77,20 +99,40 @@ pub fn run(
             verbs::rewrite::dispatch(rest, stdout, stderr)
         }
         Some((command, rest)) => match specialists::lookup(command) {
-            Some(classify) => compression::execute_and_compress(
-                command,
-                command,
-                rest,
-                stdout,
-                stderr,
-                executor,
-                history,
-                options.budget,
-                classify,
-            ),
+            Some(classify) => {
+                let Some(budget) = resolve_budget(options.budget, stderr) else {
+                    return 2;
+                };
+                compression::execute_and_compress(
+                    command,
+                    command,
+                    rest,
+                    stdout,
+                    stderr,
+                    executor,
+                    history,
+                    Some(budget),
+                    classify,
+                )
+            }
             None => unsupported_command(command, stderr),
         },
         None => no_command_given(stderr),
+    }
+}
+
+/// Resolves the effective budget for this invocation (CLI flag > env var > project
+/// config > global config > built-in default) so every budget-consuming verb sees a
+/// concrete ceiling instead of treating "no `--budget` flag" as "no limit at all" --
+/// `stk config`'s own resolution stays separate since it needs the raw CLI override and
+/// the individual file/env layers for its display, not just the final number.
+fn resolve_budget(cli_budget: Option<usize>, stderr: &mut dyn Write) -> Option<usize> {
+    match settings::resolve_effective(cli_budget) {
+        Ok(resolved) => Some(resolved.budget),
+        Err(message) => {
+            let _ = writeln!(stderr, "stk: {message}");
+            None
+        }
     }
 }
 

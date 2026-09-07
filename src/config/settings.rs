@@ -1,3 +1,6 @@
+use std::io::ErrorKind;
+use std::path::{Path, PathBuf};
+
 /// The fully-resolved config: every field concrete, after precedence (`CLI flags > env
 /// vars > project config > global config > built-in defaults`) is applied.
 /// `intent`/`session_memory`/`session_ttl_minutes` are forward-compatible schema only.
@@ -97,6 +100,71 @@ pub fn resolve(
             .session_ttl_minutes
             .unwrap_or(defaults.session_ttl_minutes),
     })
+}
+
+/// Matches `src/history.rs`'s `cache_dir()` fallback order: an unset `HOME` (a minimal
+/// container or cron job) must resolve to a stable absolute path, not a cwd-relative one.
+pub fn global_config_path() -> PathBuf {
+    if let Some(xdg) = std::env::var_os("XDG_CONFIG_HOME").filter(|v| !v.is_empty()) {
+        return PathBuf::from(xdg).join("stk").join("config.toml");
+    }
+    if let Some(home) = std::env::var_os("HOME") {
+        return PathBuf::from(home)
+            .join(".config")
+            .join("stk")
+            .join("config.toml");
+    }
+    std::env::temp_dir().join("stk-config").join("config.toml")
+}
+
+pub fn project_config_path() -> PathBuf {
+    PathBuf::from(".stk").join("config.toml")
+}
+
+/// `NotFound` means "this layer doesn't exist," not an error; any other read failure
+/// (permission denied, not valid UTF-8, ...) is surfaced rather than silently ignored.
+pub fn read_config_file(path: &Path) -> Result<Option<String>, String> {
+    match std::fs::read_to_string(path) {
+        Ok(text) => Ok(Some(text)),
+        Err(err) if err.kind() == ErrorKind::NotFound => Ok(None),
+        Err(err) => Err(format!("failed to read '{}': {err}", path.display())),
+    }
+}
+
+/// Errors (rather than silently ignoring) on a malformed value, matching how a malformed
+/// *file* layer errors -- a typo'd env var should never be mistaken for "not set".
+pub fn env_settings() -> Result<PartialSettings, String> {
+    Ok(PartialSettings {
+        budget: parse_env("STK_BUDGET")?,
+        intent: std::env::var("STK_INTENT").ok(),
+        session_memory: parse_env("STK_SESSION_MEMORY")?,
+        session_ttl_minutes: parse_env("STK_SESSION_TTL_MINUTES")?,
+    })
+}
+
+fn parse_env<T: std::str::FromStr>(key: &str) -> Result<Option<T>, String> {
+    match std::env::var(key) {
+        Ok(value) => value
+            .parse()
+            .map(Some)
+            .map_err(|_| format!("invalid value for {key}: '{value}'")),
+        Err(_) => Ok(None),
+    }
+}
+
+/// The CLI entry point's boundary call: resolves the effective config for this process
+/// from the real filesystem and environment, so every verb sees a concrete, precedence-
+/// resolved budget instead of treating "no `--budget` flag" as "no limit at all".
+pub fn resolve_effective(cli_budget: Option<usize>) -> Result<Settings, String> {
+    let project_text = read_config_file(&project_config_path())?;
+    let global_text = read_config_file(&global_config_path())?;
+    let env = env_settings()?;
+    resolve(
+        cli_budget,
+        env,
+        project_text.as_deref(),
+        global_text.as_deref(),
+    )
 }
 
 /// Renders as TOML via the library's own serializer (not hand-formatted `format!`), so
