@@ -1,4 +1,10 @@
+<div align="center">
+
 <img src="docs/assets/logo.svg" alt="stk" width="220">
+
+**CLI proxy that reduces LLM token consumption by up to ~80% on common dev commands. Single Rust binary, zero dependencies.**
+
+</div>
 
 ## What STK Does
 
