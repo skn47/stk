@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 120" width="260" height="120" role="img" aria-label="stk">
+  <title>stk</title>
+  <rect x="8" y="8" width="244" height="104" rx="12" fill="none" stroke="#6e6e6e" stroke-width="4"/>
+  <text x="32" y="76" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="42" fill="#6e6e6e">$</text>
+  <text x="85" y="80" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="58" font-weight="700" fill="#CE422B">stk</text>
+  <rect x="194" y="34" width="20" height="52" fill="#CE422B"/>
+</svg>
